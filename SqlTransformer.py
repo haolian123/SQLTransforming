@@ -1,8 +1,11 @@
 import pyperclip
 import re
 import os
+import tkinter as tk
+from tkinter import ttk
+from tkinter import messagebox
 class SqlTransformer:
-    select=0
+    __select=0
     # Hive SQL to Oracle SQL
     h2o = {
         'string': 'varchar2(500)',
@@ -41,11 +44,88 @@ class SqlTransformer:
         'boolean': 'boolean'
     }
 
-    
+    select_dict={
+        "不转化":0,
+        "Hive SQL to Oracle SQL":1,
+        "Oracle SQL to Hive SQL":2,
+        "Hive SQL to PostgreSQL":3
+    }
     def __init__(self):
-        pass
+
+        # 创建一个窗口对象
+        self.window = tk.Tk()
+
+        # 设置窗口标题
+        self.window.title('SQLTransformer')
+
+        # 设置窗口大小和位置
+        self.window.geometry('480x550+500+200')
+
+        #表名
+        self.tablename=tk.StringVar()
+        self.tablename.set("tablename")
+        #中文字体
+        font_chinese="华文中宋"
+        font_color='black'
+
+        # 创建一个标签，显示"表名"
+        self.tablename_label = tk.Label(self.window, text="表名：", font=(font_chinese, 13))
+        self.tablename_label.configure(fg=font_color, font=(font_chinese, 15,'bold'))
+        self.tablename_label.place(x=10, y=15)
+
+        # 创建一个文本框，用于显示表名
+        self.tablename_entry = tk.Entry(self.window, textvariable=self.tablename, width=30, state='normal',font=('Arial',15))
+        self.tablename_entry.place(x=110, y=20)
+
+        
+        # 创建一个标签，显示"转化形式"
+
+        self.transform_mode_label = tk.Label(self.window, text="转化方式", font=(font_chinese, 13))
+        self.transform_mode_label.configure(fg=font_color, font=(font_chinese, 15,'bold'))
+        self.transform_mode_label.place(x=10, y=50)
+
+        #添加一个下拉框
+        self.combobox = ttk.Combobox(self.window, textvariable="不转化",values=["不转化", "Hive SQL to Oracle SQL", "Oracle SQL to Hive SQL",'Hive SQL to PostgreSQL'])
+        self.combobox.bind("<<ComboboxSelected>>", lambda event: self.__on_combobox_select(event, combobox=self.combobox))
+        self.combobox.current(0)
+        self.combobox.place(x=110, y=60)
+
+        # 创建一个按钮，点击后调用thread_run函数，用于运行程序
+        self.exec_button = tk.Button(self.window, text='生成', width=5, height=2, command=self.__run)
+        self.exec_button.place(x=350, y=18)
+        self.exec_button.configure(fg=font_color, font=(font_chinese, 17,'bold'))
 
 
+        # 创建一个文本框
+
+        self.text = tk.Text(self.window, height=30, width=50, font=('', 12))
+        self.text.place(x=4, y=100)
+
+
+      
+        # 创建一个滚动条
+        self.scrollbar = tk.Scrollbar(self.window)
+
+        # 设置滚动条与文本框的关联
+        self.scrollbar.config(command=self.text.yview)
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.text.config(yscrollcommand=self.scrollbar.set)
+
+
+        # 滚动到文本框末尾
+        self.text.see('end')
+
+    def __run(self):
+        self.work()
+
+    def __on_combobox_select(self,even,combobox):
+        selected_item = combobox.get()
+        #返回选择的选项号
+        self.__select= self.select_dict[selected_item]
+
+
+
+    
     def inputs(self):
         
         tablename=input("请输入表名：\n")
@@ -96,7 +176,7 @@ class SqlTransformer:
             return 
         SQL=f"create table {tablename}("
         strs=field
-        # print(strs)
+
         for i in range(0,len(strs),2):
             SQL+='\n    '+strs[i]+' '+strs[i+1]
             if i !=len(strs)-2:
@@ -105,11 +185,22 @@ class SqlTransformer:
         SQL+='\n)'
         pyperclip.copy(SQL)
         print("语句已生成！")
-        
+        messagebox.showinfo('生成成功！',"语句已复制到剪切板！")
+
+    #将输入的文本转化为列表
+    def __get_filed_list(self,text):
+        filed_list=text.split('\n')
+        return filed_list
+    
     def work(self):
-        field_list,tablename=self.inputs()
+
+        tablename=self.tablename.get()
+        SQL_text = self.text.get("1.0", "end-1c")
+        
+        # print(SQL_text)
+        field_list=self.__get_filed_list(SQL_text)
         field_list=self.process(field_list)
-        select=self.select
+        select=self.__select
         trans_dict=None
         if select == 1:
             #Hive SQL to Oracle SQL
@@ -123,6 +214,7 @@ class SqlTransformer:
         if trans_dict!=None:
             field_list=self.transform(field_list,trans_dict)
         self.get_sql(field_list,tablename)
+
     #替换字段
     def transform(self,field_list,trans_dict):
         keys=trans_dict.keys()
@@ -149,12 +241,7 @@ class SqlTransformer:
         return match!=None
 
 if __name__=='__main__':
-    ST=SqlTransformer()
-    while True:
-        print("请确保结尾有换行符。\n执行完成后结果将自动拷贝到剪切板")
-        ST.work()
-        os.system('cls') 
-
-
+    M=SqlTransformer()
+    M.window.mainloop()
 
 
