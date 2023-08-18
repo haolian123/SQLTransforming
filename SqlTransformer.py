@@ -50,6 +50,7 @@ class SqlTransformer:
         "Oracle SQL to Hive SQL":2,
         "Hive SQL to PostgreSQL":3
     }
+
     def __init__(self):
 
         # 创建一个窗口对象
@@ -76,7 +77,6 @@ class SqlTransformer:
         # 创建一个文本框，用于显示表名
         self.tablename_entry = tk.Entry(self.window, textvariable=self.tablename, width=30, state='normal',font=('Arial',15))
         self.tablename_entry.place(x=110, y=20)
-
         
         # 创建一个标签，显示"转化形式"
 
@@ -85,7 +85,7 @@ class SqlTransformer:
         self.transform_mode_label.place(x=10, y=50)
 
         #添加一个下拉框
-        self.combobox = ttk.Combobox(self.window, textvariable="不转化",values=["不转化", "Hive SQL to Oracle SQL", "Oracle SQL to Hive SQL",'Hive SQL to PostgreSQL'])
+        self.combobox = ttk.Combobox(self.window,width=18, state="readonly",textvariable="不转化",font=(font_chinese, 13),values=["不转化", "Hive SQL to Oracle SQL", "Oracle SQL to Hive SQL",'Hive SQL to PostgreSQL'])
         self.combobox.bind("<<ComboboxSelected>>", lambda event: self.__on_combobox_select(event, combobox=self.combobox))
         self.combobox.current(0)
         self.combobox.place(x=110, y=60)
@@ -95,13 +95,11 @@ class SqlTransformer:
         self.exec_button.place(x=350, y=18)
         self.exec_button.configure(fg=font_color, font=(font_chinese, 17,'bold'))
 
-
         # 创建一个文本框
 
-        self.text = tk.Text(self.window, height=30, width=50, font=('', 12))
+        self.text = tk.Text(self.window, height=30, width=50, font=('Arial', 12))
         self.text.place(x=4, y=100)
-
-
+        self.text.insert("end",'将SQL的字段名和数据类型粘贴(ctrl+v)到此处')
       
         # 创建一个滚动条
         self.scrollbar = tk.Scrollbar(self.window)
@@ -111,12 +109,9 @@ class SqlTransformer:
         self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.text.config(yscrollcommand=self.scrollbar.set)
 
-
         # 滚动到文本框末尾
         self.text.see('end')
 
-    def __run(self):
-        self.work()
 
     def __on_combobox_select(self,even,combobox):
         selected_item = combobox.get()
@@ -124,33 +119,8 @@ class SqlTransformer:
         self.__select= self.select_dict[selected_item]
 
 
-
-    
-    def inputs(self):
-        
-        tablename=input("请输入表名：\n")
-        print_strs='''选择SQL数据类型转化形式：
-        0:不转换。
-        1:Hive SQL to Oracle SQL
-        2:Oracle SQL to Hive SQL
-        3:Hive SQL to PostgreSQL
-        请输入编号：
-        '''
-        print(print_strs)
-        self.select=eval(input())
-        print("选择为:",self.select)
-        cin = []
-        print('请输入复制的字段，输入完成后按回车再按ctrl+c结束输入：')
-        while True:
-            try:
-                cin.append(input())
-            except:
-                break
-        return cin,tablename
-    
-
     #输入处理
-    def process(self,cin):
+    def __process(self,cin):
         res=[]
         flag=False
         for line in cin:
@@ -170,10 +140,9 @@ class SqlTransformer:
     
 
     #得到sql语句
-    def get_sql(self,field,tablename):
+    def __get_sql(self,field,tablename):
         if(len(field)%2!=0):
-            print("输入有误！请确保输入的结尾有换行！")
-            return 
+            raise Exception("请检查每个字段是否有唯一的数据类型与之对应！")
         SQL=f"create table {tablename}("
         strs=field
 
@@ -184,7 +153,7 @@ class SqlTransformer:
 
         SQL+='\n)'
         pyperclip.copy(SQL)
-        print("语句已生成！")
+        
         messagebox.showinfo('生成成功！',"语句已复制到剪切板！")
 
     #将输入的文本转化为列表
@@ -192,54 +161,65 @@ class SqlTransformer:
         filed_list=text.split('\n')
         return filed_list
     
-    def work(self):
+    def __run(self):
+        try:
+            #得到表名和字段+数据类型
+            tablename=self.tablename.get()
+            SQL_text = self.text.get("1.0", "end-1c")
+            
+            #将输入文本转化为列表
+            field_list=self.__get_filed_list(SQL_text)
+            #将列表拆分为字段名+数据类型的形式
+            field_list=self.__process(field_list)
+            #得到转化形式
+            select=self.__select
+            #转化字典
+            trans_dict=None
 
-        tablename=self.tablename.get()
-        SQL_text = self.text.get("1.0", "end-1c")
+            if select == 1:
+                #Hive SQL to Oracle SQL
+                trans_dict=self.h2o
+            elif select ==2:
+                #Oracle SQL to Hive SQL
+                trans_dict=self.o2h
+            elif select ==3:
+                # Hive SQL to PostgreSQL
+                trans_dict=self.h2p
+            #需要转化
+            if trans_dict!=None:
+                field_list=self.__transform(field_list,trans_dict)
+            #得到sql语句
+            try:
+                self.__get_sql(field_list,tablename)
+            except Exception as e:
+                messagebox.showerror('生成失败！',e)
+        except:
+            messagebox.showerror('生成失败！',"请检查粘贴的内容是否符合格式要求！")
         
-        # print(SQL_text)
-        field_list=self.__get_filed_list(SQL_text)
-        field_list=self.process(field_list)
-        select=self.__select
-        trans_dict=None
-        if select == 1:
-            #Hive SQL to Oracle SQL
-            trans_dict=self.h2o
-        elif select ==2:
-            #Oracle SQL to Hive SQL
-            trans_dict=self.o2h
-        elif select ==3:
-            # Hive SQL to PostgreSQL
-            trans_dict=self.h2p
-        if trans_dict!=None:
-            field_list=self.transform(field_list,trans_dict)
-        self.get_sql(field_list,tablename)
 
     #替换字段
-    def transform(self,field_list,trans_dict):
+    def __transform(self,field_list,trans_dict):
+        #获得字典的键
         keys=trans_dict.keys()
         for i in range(1,len(field_list),2):
             data_type=field_list[i]
 
             #正则表达式匹配特殊字段 
             for key in keys:
-                if self.re_match(key,data_type):
+                if self.__re_match(key,data_type):
                     field_list[i]=trans_dict[key]
                     break 
             #替换字段
             if data_type in keys:
                 field_list[i]=trans_dict[data_type]
-                
-
-            
         return field_list
     
-    def re_match(self,key,data_type):
-
-        pattern=f'{key}.*'
+    def __re_match(self,key,data_type):
+        # 正则匹配
+        pattern=f'^{key}.*'
         match=re.search(pattern,data_type)
         return match!=None
-
+    
 if __name__=='__main__':
     M=SqlTransformer()
     M.window.mainloop()
